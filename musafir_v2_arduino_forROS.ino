@@ -56,8 +56,8 @@ double measuredVelLeft = 0, measuredVelRight = 0;
 double pwmL = 0, pwmR = 0;
 double requiredVelLeft = 0, requiredVelRight = 0;
 // PID (&input, &output, &setpoint, kp, ki, kd, DIRECT/REVERSE)
-PID pidL(&measuredVelLeft, &pwmL, &requiredVelLeft, 300 , 0, 0, DIRECT);
-PID pidR(&measuredVelRight, &pwmR, &requiredVelRight, 300, 0, 0, DIRECT);
+PID pidL(&measuredVelLeft, &pwmL, &requiredVelLeft, 30 , 0, 0, DIRECT);
+PID pidR(&measuredVelRight, &pwmR, &requiredVelRight, 30, 0, 0, DIRECT);
 
 //      PID////
 
@@ -70,13 +70,13 @@ void left_wheel_desired_vel(const std_msgs::Int16& rate)
   if(requiredVelLeft >= 0)
     motorL.setDir(FORWARD);
     
-  else if(requiredVelLeft <= 0)
+  else if(requiredVelLeft < 0)
     motorL.setDir(BACKWARD);
     
   requiredVelLeft=abs(requiredVelLeft);
   
-  if(requiredVelLeft >= .1)
-  timeOutPreviousMillis= currentMillis;
+  //if(requiredVelLeft >= 0.01)
+  timeOutPreviousMillis=  millis();
 }
 
 void right_wheel_desired_vel(const std_msgs::Int16& rate1)
@@ -84,14 +84,13 @@ void right_wheel_desired_vel(const std_msgs::Int16& rate1)
   if(requiredVelRight >= 0)
     motorR.setDir(FORWARD);
     
-  else if(requiredVelRight <= 0)
+  else if(requiredVelRight < 0)
     motorR.setDir(BACKWARD);
     
   requiredVelRight=abs(requiredVelRight);
-//  vr = requiredVelRight;   //commit
-//  velocityDrive(vl,vr);     //commit
-  if(requiredVelRight >= 0.10)
-  timeOutPreviousMillis= currentMillis;
+  
+  //if(requiredVelRight >= 0.01)
+  timeOutPreviousMillis= millis();
 }
 
 ros::Subscriber <std_msgs::Int16> subRateL("lwheel_desired_vel",left_wheel_desired_vel );
@@ -103,7 +102,7 @@ ros::Subscriber <std_msgs::Int16> subRateR("rwheel_desired_vel",right_wheel_desi
 
 Encoder encL(19, 27);
 Encoder encR(18, 25);
-long encCurrL, encCurrR;
+double encCurrL, encCurrR;
 long int encOldL, encOldR;
 double encRateL, encRateR;
 int enc_left_sign = 1 ;
@@ -113,7 +112,7 @@ void setup()
 {
   
   Serial.begin(115200);
-  Wire.begin();        // join i2c bus (address optional for master) 
+//  Wire.begin();        // join i2c bus (address optional for master) 
   nh.initNode();
   nh.advertise(pub_leftEnc);
   nh.advertise(pub_rightEnc);
@@ -135,16 +134,16 @@ void setup()
 void loop()
 {
   currentMillis = millis();
-  if (currentMillis - previousMillis >= interval) {   //SETTING PID, Encoder and The Navigator.
+  if (int(currentMillis - previousMillis) >= interval) {   //SETTING PID, Encoder and The Navigator.
 
     previousMillis = currentMillis;
     encCurrL = enc_left_sign * encL.read();
     encCurrR = enc_right_sign * encR.read();
-    encRateL = (double)(encCurrL - encOldL); 
-    measuredVelLeft = (encRateL/TICKS_PER_REV) * 3.142 * WHEEL_DIAMETER_METER * 100; // since interval is 10ms thats why i am multiplying it *100 
+    encRateL = double(encCurrL - encOldL); 
+    measuredVelLeft = (encRateL/TICKS_PER_REV) * 3.142 * WHEEL_DIAMETER_METER * 100.0; // since interval is 10ms thats why i am multiplying it *100 
     
-    encRateR = (double)(encCurrR - encOldR);
-    measuredVelRight = (encRateR/TICKS_PER_REV) * 3.142 * WHEEL_DIAMETER_METER * 100; // since interval is 10ms thats why i am multiplying it *100
+    encRateR = double(encCurrR - encOldR);
+    measuredVelRight = (encRateR/TICKS_PER_REV) * 3.142 * WHEEL_DIAMETER_METER * 100.0; // since interval is 10ms thats why i am multiplying it *100
     
     measuredVelLeft = abs(measuredVelLeft);
     measuredVelRight = abs(measuredVelRight);
@@ -214,14 +213,15 @@ void velocityDrive(int VL,int VR)
   void brakeLeftMotor(int intensity)
 {
   intensity = constrain(intensity, 0, 250); //Double Checks
-  motorL.setPWM(intensity);
   motorL.setDir(BRAKE);
+  motorL.setPWM(intensity);
+
 }
 void brakeRighttMotor(int intensity)
 {
   intensity = constrain(intensity, 0, 250); //Double Checks
-  motorR.setPWM(intensity);
   motorR.setDir(BRAKE);
+  motorR.setPWM(intensity);
 }
 
 void initPID(void) {
