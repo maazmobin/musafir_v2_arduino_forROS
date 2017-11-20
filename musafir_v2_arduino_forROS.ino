@@ -1,3 +1,4 @@
+
 #include <Wire.h>
 #include <ros.h>
 #include <std_msgs/Float32.h>
@@ -29,7 +30,7 @@ float WHEEL_DIAMETER_METER = 0.16 ;       //m
 float DISTANCE_PER_TICK = (M_PI*WHEEL_DIAMETER_METER) / ((float)TICKS_PER_REV) ;
 
 unsigned long timeOutPreviousMillis = 0;  //Velocity Time Out.
-int velocityTimeOut = 500; //ms
+int velocityTimeOut = 1500; //ms
 unsigned long currentMillis = 0;
 
 unsigned long previousMillis = 0;
@@ -37,6 +38,13 @@ double interval = 10; // in ms
 
 unsigned long pubPreviousMillis = 0;
 int pubInterval = 100;
+
+unsigned long accPreviousMillis = 0;
+int accInterval = 1; //ms
+double changeVelPerLoop = 0.006; // meter per second square
+double windowExit = 0.007; // 0.1m/s before
+double accVelL = 0 , accVelR = 0;
+double accVelLTemp = 0 , accVelRTemp = 0;
 
 #include "MusafirMotor.h"
 MusafirMotor motorL(41, 42, 45);
@@ -56,9 +64,10 @@ double measuredVelLeft = 0, measuredVelRight = 0;
 double pwmL = 0, pwmR = 0;
 double requiredVelLeft = 0, requiredVelRight = 0;
 // PID (&input, &output, &setpoint, kp, ki, kd, DIRECT/REVERSE)
-PID pidL(&measuredVelLeft, &pwmL, &requiredVelLeft, 30 , 0, 0, DIRECT);
-PID pidR(&measuredVelRight, &pwmR, &requiredVelRight, 30, 0, 0, DIRECT);
-
+PID pidL(&measuredVelLeft, &pwmL, &accVelL, 30 , 0, 0, DIRECT);
+PID pidR(&measuredVelRight, &pwmR, &accVelR, 30, 0, 0, DIRECT);
+//PID pidL(&measuredVelLeft, &pwmL, &requiredVelLeft, 30 , 0, 0, DIRECT);
+//PID pidR(&measuredVelRight, &pwmR, &requiredVelRight, 30, 0, 0, DIRECT);
 //      PID////
 
 boolean pidActive = true;
@@ -67,30 +76,19 @@ boolean pidActive = true;
 void left_wheel_desired_vel(const std_msgs::Int16& rate)
 {
   requiredVelLeft = rate.data; 
-  if(requiredVelLeft >= 0)
-    motorL.setDir(FORWARD);
-    
-  else if(requiredVelLeft < 0)
-    motorL.setDir(BACKWARD);
-    
-  requiredVelLeft=abs(requiredVelLeft);
-  
+  requiredVelLeft = constrain(requiredVelLeft, -4 , 4);  
   //if(requiredVelLeft >= 0.01)
   timeOutPreviousMillis=  millis();
+  pidActive = true;
 }
 
 void right_wheel_desired_vel(const std_msgs::Int16& rate1)
-{ requiredVelRight = rate1.data ;
-  if(requiredVelRight >= 0)
-    motorR.setDir(FORWARD);
-    
-  else if(requiredVelRight < 0)
-    motorR.setDir(BACKWARD);
-    
-  requiredVelRight=abs(requiredVelRight);
-  
+{ 
+  requiredVelRight = rate1.data ;
+  requiredVelRight = constrain(requiredVelRight, -4 , 4);
   //if(requiredVelRight >= 0.01)
   timeOutPreviousMillis= millis();
+  pidActive = true;
 }
 
 ros::Subscriber <std_msgs::Int16> subRateL("lwheel_desired_vel",left_wheel_desired_vel );
@@ -156,8 +154,8 @@ void loop()
       pidL.Compute();
       pidR.Compute();
       
-        if (requiredVelLeft > 0) motorL.setPWM(pwmL);
-        if (requiredVelRight > 0) motorR.setPWM(pwmR);
+      motorL.setPWM(pwmL);
+      motorR.setPWM(pwmR);
    //Serial.println(pwmL);
     }
     //velocityDrive(100,100);
@@ -182,6 +180,51 @@ void loop()
   if (currentMillis - timeOutPreviousMillis >= velocityTimeOut ) {  // Break Velocity after Certain Time.
     brakeLeftMotor(250);
     brakeRighttMotor(250);
+    requiredVelLeft = 0;
+    requiredVelRight = 0;
+    accVelLTemp = 0;
+    accVelRTemp = 0;
+    pidActive = false;
+  }
+  
+  if (long(currentMillis - accPreviousMillis) >= accInterval && pidActive == true ) {  // Break Velocity after Certain Time.
+      double a = requiredVelLeft - accVelLTemp;
+      if (a > windowExit) {
+        accVelLTemp += changeVelPerLoop;
+      }
+      else if (a < -windowExit) {
+       accVelLTemp -= changeVelPerLoop;
+      }
+      else {
+        accVelLTemp = requiredVelLeft;
+      }
+   // Serial.print("acc: ");
+  //  Serial.println(accVelL);
+      double b = requiredVelRight - accVelRTemp;
+      if (b > windowExit) {
+        accVelRTemp += changeVelPerLoop;
+      }
+      else if (b < -windowExit) {
+        accVelRTemp -= changeVelPerLoop;
+      }
+      else {
+        accVelRTemp = requiredVelRight;
+      }
+
+      accPreviousMillis = currentMillis ;
+      
+      if(accVelLTemp >= 0)
+        motorL.setDir(FORWARD);    
+      else if(accVelLTemp < 0)
+        motorL.setDir(BACKWARD);
+        
+      if(accVelRTemp >= 0)
+        motorR.setDir(FORWARD);    
+      else if(accVelRTemp < 0)
+        motorR. setDir(BACKWARD);
+       
+      accVelL = abs(accVelLTemp);
+      accVelR = abs(accVelRTemp);
   }
   nh.spinOnce();
 }
