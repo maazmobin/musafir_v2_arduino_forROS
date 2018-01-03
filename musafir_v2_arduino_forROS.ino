@@ -5,6 +5,11 @@
 #include <geometry_msgs/Twist.h>
 #include <std_msgs/Int32.h>
 #include <std_msgs/Int16.h>
+#include <std_msgs/String.h>
+
+#include <ros/time.h>
+#include <tf/tf.h>
+#include <tf/transform_broadcaster.h>
 
 ros::NodeHandle  nh;
 geometry_msgs::Twist msg;
@@ -21,13 +26,27 @@ ros::Publisher pub_rightEnc("rwheel_ticks", &rightEnc);
 //std_msgs::Float32 rightWheelVel;
 //ros::Publisher pub_rightEncRate("rwheel_rate", &rightWheelVel);
 
+std_msgs::String str_msg;
+ros::Publisher dummy_odom("dummy_odom", &str_msg);
+
 float vl;
 float vr;
 
-float WHEELBASE = 0.189 ;                 //m
+float WHEELBASE = 0.32 ;                 //m
 long int TICKS_PER_REV = 5480 ;       
 float WHEEL_DIAMETER_METER = 0.16 ;       //m
 float DISTANCE_PER_TICK = (M_PI*WHEEL_DIAMETER_METER) / ((float)TICKS_PER_REV) ;
+
+//ODOMETRY PARAMETERS
+double x = 0 , y = 0 ; 
+float theta = 0 , c_theta ;
+float sr , sl ,mean_s ;
+
+char base_link[] = "/base_link";
+char odom[] = "/odom";
+
+String dummy_string =" ";
+//
 
 unsigned long timeOutPreviousMillis = 0;  //Velocity Time Out.
 int velocityTimeOut = 1500; //ms
@@ -112,8 +131,9 @@ void setup()
   Serial.begin(115200);
 //  Wire.begin();        // join i2c bus (address optional for master) 
   nh.initNode();
-  nh.advertise(pub_leftEnc);
+  nh.advertise(pub_leftEnc) ;
   nh.advertise(pub_rightEnc);
+  nh.advertise(dummy_odom)  ;
   //nh.advertise(pub_leftEncRate);
   //nh.advertise(pub_rightEncRate);
   //nh.subscribe(sub);
@@ -137,17 +157,47 @@ void loop()
     previousMillis = currentMillis;
     encCurrL = enc_left_sign * encL.read();
     encCurrR = enc_right_sign * encR.read();
-    encRateL = double(encCurrL - encOldL); 
-    measuredVelLeft = (encRateL/TICKS_PER_REV) * 3.142 * WHEEL_DIAMETER_METER * 100.0; // since interval is 10ms thats why i am multiplying it *100 
+    
+    encRateL = double(encCurrL - encOldL);
+    sl = (encRateL/TICKS_PER_REV) * 3.142 * WHEEL_DIAMETER_METER ; 
+    measuredVelLeft = sl * 100.0; // since interval is 10ms thats why i am multiplying it *100 
     
     encRateR = double(encCurrR - encOldR);
-    measuredVelRight = (encRateR/TICKS_PER_REV) * 3.142 * WHEEL_DIAMETER_METER * 100.0; // since interval is 10ms thats why i am multiplying it *100
+    sr = (encRateR/TICKS_PER_REV) * 3.142 * WHEEL_DIAMETER_METER ; 
+    measuredVelRight = sr * 100.0; // since interval is 10ms thats why i am multiplying it *100
+
+    //performing odometry calculations
+    mean_s = (sl + sr) / 2;
+    theta = ( (sr - sl) / WHEELBASE ) + theta;
     
+    if (theta>6.283f)
+    theta-=6.283;
+    else if(theta<0)
+    theta+=6.283;
+
+    x = x + mean_s * cos(theta);
+    y = y + mean_s * sin(theta);
+    t.header.frame_id = odom;
+    t.child_frame_id = base_link;
+  
+    t.transform.translation.x = x;
+    t.transform.translation.y = y;
+  
+    t.transform.rotation = tf::createQuaternionFromYaw(theta);
+    t.header.stamp = nh.now();
+    broadcaster.sendTransform(t);
+    dummy_string = String(x) + " , " + String(y) + " , " + String(theta) ;
+    int str_len = dummy_string.length() + 1; 
+    char char_array[str_len];
+    dummy_string.toCharArray(char_array, str_len);
+    str_msg.data = char_array;
+    dummy_odom.publish(&str_msg); 
+    // ending odometry
     measuredVelLeft = abs(measuredVelLeft);
     measuredVelRight = abs(measuredVelRight);
-    Serial.print(String(measuredVelLeft));
+    /*Serial.print(String(measuredVelLeft));
     Serial.print(" , ");
-    Serial.println(requiredVelLeft);
+    Serial.println(requiredVelLeft);*/
     encOldL = encCurrL;
     encOldR = encCurrR;
     if (pidActive) {
