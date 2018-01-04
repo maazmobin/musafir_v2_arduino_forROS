@@ -186,8 +186,15 @@ void loop()
   
     t.transform.translation.x = x;
     t.transform.translation.y = y;
-  
-    t.transform.rotation = tf::createQuaternionFromYaw(theta);
+    
+    if(theta > 3.142)
+    {
+      c_theta = theta - 6.283 ;
+      }
+    else
+    c_theta = theta ;
+    
+    t.transform.rotation = tf::createQuaternionFromYaw(c_theta);
     t.header.stamp = nh.now();
     broadcaster.sendTransform(t);
     
