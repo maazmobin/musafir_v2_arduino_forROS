@@ -5,7 +5,7 @@
 #include <geometry_msgs/Twist.h>
 #include <std_msgs/Int32.h>
 #include <std_msgs/Int16.h>
-#include <std_msgs/String.h>
+//#include <std_msgs/String.h>
 
 #include <ros/time.h>
 #include <tf/tf.h>
@@ -13,6 +13,9 @@
 
 ros::NodeHandle  nh;
 geometry_msgs::Twist msg;
+
+geometry_msgs::TransformStamped t;
+tf::TransformBroadcaster broadcaster;
 
 std_msgs::Int16 leftEnc;
 ros::Publisher pub_leftEnc("lwheel_ticks", &leftEnc);
@@ -26,8 +29,8 @@ ros::Publisher pub_rightEnc("rwheel_ticks", &rightEnc);
 //std_msgs::Float32 rightWheelVel;
 //ros::Publisher pub_rightEncRate("rwheel_rate", &rightWheelVel);
 
-std_msgs::String str_msg;
-ros::Publisher dummy_odom("dummy_odom", &str_msg);
+//std_msgs::String str_msg;
+//ros::Publisher dummy_odom("dummy_odom", &str_msg);
 
 float vl;
 float vr;
@@ -59,9 +62,9 @@ unsigned long pubPreviousMillis = 0;
 int pubInterval = 100;
 
 unsigned long accPreviousMillis = 0;
-int accInterval = 1; //ms
-double changeVelPerLoop = 0.006; // meter per second square
-double windowExit = 0.007; // 0.1m/s before
+int accInterval = 3; //ms
+double changeVelPerLoop = 0.025; // meter per second square
+double windowExit = 0.031; // 0.1m/s before
 double accVelL = 0 , accVelR = 0;
 double accVelLTemp = 0 , accVelRTemp = 0;
 
@@ -131,9 +134,10 @@ void setup()
   Serial.begin(115200);
 //  Wire.begin();        // join i2c bus (address optional for master) 
   nh.initNode();
+  broadcaster.init(nh);
   nh.advertise(pub_leftEnc) ;
   nh.advertise(pub_rightEnc);
-  nh.advertise(dummy_odom)  ;
+ // nh.advertise(dummy_odom)  ;
   //nh.advertise(pub_leftEncRate);
   //nh.advertise(pub_rightEncRate);
   //nh.subscribe(sub);
@@ -186,12 +190,13 @@ void loop()
     t.transform.rotation = tf::createQuaternionFromYaw(theta);
     t.header.stamp = nh.now();
     broadcaster.sendTransform(t);
-    dummy_string = String(x) + " , " + String(y) + " , " + String(theta) ;
+    
+    /*dummy_string = String(x) + " , " + String(y) + " , " + String(theta) ;
     int str_len = dummy_string.length() + 1; 
     char char_array[str_len];
     dummy_string.toCharArray(char_array, str_len);
     str_msg.data = char_array;
-    dummy_odom.publish(&str_msg); 
+    dummy_odom.publish(&str_msg);*/ 
     // ending odometry
     measuredVelLeft = abs(measuredVelLeft);
     measuredVelRight = abs(measuredVelRight);
