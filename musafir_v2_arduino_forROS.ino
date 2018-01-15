@@ -1,4 +1,3 @@
-
 #include <Wire.h>
 #include <ros.h>
 #include <std_msgs/Float32.h>
@@ -10,12 +9,13 @@
 #include <ros/time.h>
 #include <tf/tf.h>
 #include <tf/transform_broadcaster.h>
+#include <nav_msgs/Odometry.h>
 
 ros::NodeHandle  nh;
-geometry_msgs::Twist msg;
 
-geometry_msgs::TransformStamped t;
-tf::TransformBroadcaster broadcaster;
+//geometry_msgs::Quaternion odom_quat;
+//geometry_msgs::TransformStamped t;
+//tf::TransformBroadcaster broadcaster;
 
 std_msgs::Int16 leftEnc;
 ros::Publisher pub_leftEnc("lwheel_ticks", &leftEnc);
@@ -29,24 +29,22 @@ ros::Publisher pub_rightEnc("rwheel_ticks", &rightEnc);
 //std_msgs::Float32 rightWheelVel;
 //ros::Publisher pub_rightEncRate("rwheel_rate", &rightWheelVel);
 
-//std_msgs::String str_msg;
-//ros::Publisher dummy_odom("dummy_odom", &str_msg);
+geometry_msgs::Twist vel_msg;
+ros::Publisher pub_vel("twistVelocity", &vel_msg);
 
 float vl;
 float vr;
 
+// ROBOT PARAMETERS                  *************************************************
 float WHEELBASE = 0.32 ;                 //m
 long int TICKS_PER_REV = 5480 ;       
 float WHEEL_DIAMETER_METER = 0.16 ;       //m
 float DISTANCE_PER_TICK = (M_PI*WHEEL_DIAMETER_METER) / ((float)TICKS_PER_REV) ;
 
-//ODOMETRY PARAMETERS
+// ODOMETRY PARAMETERS
 double x = 0 , y = 0 ; 
 float theta = 0 , c_theta ;
 float sr , sl ,mean_s ;
-
-char base_link[] = "/base_link";
-char odom[] = "/odom";
 
 String dummy_string =" ";
 //
@@ -134,9 +132,10 @@ void setup()
   Serial.begin(115200);
 //  Wire.begin();        // join i2c bus (address optional for master) 
   nh.initNode();
-  broadcaster.init(nh);
+//  broadcaster.init(nh);
   nh.advertise(pub_leftEnc) ;
   nh.advertise(pub_rightEnc);
+  nh.advertise(pub_vel);
  // nh.advertise(dummy_odom)  ;
   //nh.advertise(pub_leftEncRate);
   //nh.advertise(pub_rightEncRate);
@@ -171,7 +170,7 @@ void loop()
     measuredVelRight = sr * 100.0; // since interval is 10ms thats why i am multiplying it *100
 
     //performing odometry calculations
-    mean_s = (sl + sr) / 2;
+   /* mean_s = (sl + sr) / 2;
     theta = ( (sr - sl) / WHEELBASE ) + theta;
     
     if (theta>6.283f)
@@ -181,8 +180,8 @@ void loop()
 
     x = x + mean_s * cos(theta);
     y = y + mean_s * sin(theta);
-    t.header.frame_id = odom;
-    t.child_frame_id = base_link;
+    t.header.frame_id = "odom";
+    t.child_frame_id = "base_link";
   
     t.transform.translation.x = x;
     t.transform.translation.y = y;
@@ -193,11 +192,21 @@ void loop()
       }
     else
     c_theta = theta ;
-    
-    t.transform.rotation = tf::createQuaternionFromYaw(c_theta);
+    odom_quat = tf::createQuaternionFromYaw(c_theta);
+    t.transform.rotation = odom_quat;
     t.header.stamp = nh.now();
-    broadcaster.sendTransform(t);
-    
+    broadcaster.sendTransform(t);*/
+
+    vel_msg.linear.x = measuredVelLeft;
+    vel_msg.linear.y = measuredVelRight;
+    pub_vel.publish(&vel_msg);
+    /*odom.child_frame_id = "base_link";
+    odom.header.frame_id = "odom";
+    odom.pose.pose.position.x = x;
+    odom.pose.pose.position.y = y;
+    odom.pose.pose.position.z = 0.0;
+    odom.pose.pose.orientation = odom_quat;
+    pub_odom.publish(&odom);*/
     /*dummy_string = String(x) + " , " + String(y) + " , " + String(theta) ;
     int str_len = dummy_string.length() + 1; 
     char char_array[str_len];

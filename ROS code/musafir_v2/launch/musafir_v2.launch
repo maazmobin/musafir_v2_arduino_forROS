@@ -1,5 +1,6 @@
 <launch>
 	<node name="twist2DiffVel" pkg="musafir_v2" type="twist2diff.py"/>
+	<node name="vel2odom_2" pkg="musafir_v2" type="vel2odom_2.py"/>
 	<node pkg="rosserial_python" type="serial_node.py" name="serial_node">
 		<param name="port" value="/dev/ttyUSB0"/>
 		<param name="baud" value="57600"/>
